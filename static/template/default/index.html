@@ -1,0 +1,63 @@
+<div id="app">
+    <div class="logo-container">
+        <ui-image value="db://edgegap-extension/logo.png/texture" readonly></ui-image>
+    </div>
+    <ui-prop class="spacer">
+        <ui-label slot="label">Server Directory</ui-label>
+        <ui-file id="file-server" type="directory" slot="content"></ui-file>
+    </ui-prop>
+    <ui-prop class="spacer">
+        <ui-label slot="label">Build Command</ui-label>
+        <ui-input id="inp-cmd" placeholder="Enter build command..." slot="content"></ui-input>
+    </ui-prop>
+    <ui-section class="config spacer" header="Edgegap Integration" expand>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">Registry Name</ui-label>
+            <ui-input id="inp-registry" placeholder="Enter registry name..." slot="content"></ui-input>
+        </ui-prop>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">Repository Name</ui-label>
+            <ui-input id="inp-repository" placeholder="Enter repository name..." slot="content"></ui-input>
+        </ui-prop>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">Repository Username</ui-label>
+            <ui-input id="inp-repo-username" placeholder="Enter repository username..." slot="content"></ui-input>
+        </ui-prop>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">Repository Token</ui-label>
+            <ui-input id="inp-repo-token" placeholder="Enter repository token..." slot="content" password></ui-input>
+        </ui-prop>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">API Token</ui-label>
+            <ui-input id="inp-token" placeholder="Enter token..." slot="content" password></ui-input>
+        </ui-prop>
+    </ui-section>
+    <ui-section class="config spacer" header="Image Configuration" expand>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">Image Name</ui-label>
+            <ui-input id="inp-image" placeholder="Enter image name..." slot="content"></ui-input>
+        </ui-prop>
+        <ui-prop class="prop-item">
+            <ui-label slot="label">Image Tag</ui-label>
+            <ui-input id="inp-tag" placeholder="Enter image tag... (default: latest)" slot="content"></ui-input>
+        </ui-prop>
+    </ui-section>
+    <div style="padding: 4px 16px"></div>
+    <div class="flex-hwrapper" style="padding: 0px 16px;">
+        <ui-label style="padding-right: 4px;">IP:</ui-label>
+        <ui-link id="link-ip" style="padding-right: 4px;">-</ui-link>
+        <ui-label style="padding-right: 4px;">FQDN:</ui-label>
+        <ui-link id="link-fqdn">-</ui-link>
+    </div>
+    <div class="flex-hwrapper" style="justify-content: space-between; padding: 0px 16px;" >
+        <ui-label id="lbl-status">Status of deployment: -</ui-label>
+        <div>
+            <ui-button id="btn-build" style="margin-right: 4px;">Build</ui-button>
+            <ui-button id="btn-deploy" type="primary">Deploy</ui-button>
+            <ui-button id="btn-stop-deploy" class="hidden" type="danger">Stop</ui-button>
+        </div>
+    </div>
+    <ui-section class="flex-wrapper" style="padding: 16px" header="Log" expand>
+        <textarea id="ta-log" readonly></textarea>
+    </ui-section>
+</div>

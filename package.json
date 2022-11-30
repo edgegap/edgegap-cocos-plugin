@@ -1,0 +1,68 @@
+{
+    "package_version": 2,
+    "version": "1.0.0",
+    "name": "edgegap-extension",
+    "description": "i18n:edgegap-extension.description",
+    "main": "./dist/main.js",
+    "dependencies": {
+        "axios": "^1.1.3",
+        "fs-extra": "^10.0.0",
+        "open": "^8.4.0"
+    },
+    "devDependencies": {
+        "@types/fs-extra": "^9.0.5",
+        "@types/node": "^16.0.1",
+        "typescript": "^4.3.4"
+    },
+    "panels": {
+        "default": {
+            "title": "Edgegap Panel",
+            "type": "dockable",
+            "main": "dist/panels/default",
+            "size": {
+                "min-width": 600,
+                "min-height": 600,
+                "width": 600,
+                "height": 800
+            }
+        }
+    },
+    "contributions": {
+        "menu": [
+            {
+                "path": "i18n:menu.extension/Edgegap",
+                "label": "i18n:edgegap-extension.open_panel",
+                "message": "open-panel"
+            },
+            {
+                "path": "i18n:menu.extension/Edgegap",
+                "label": "i18n:edgegap-extension.open_site",
+                "message": "open-site"
+            }
+        ],
+        "messages": {
+            "open-panel": {
+                "methods": [
+                    "openPanel"
+                ]
+            },
+            "open-site": {
+                "methods": [
+                    "openSite"
+                ]
+            }
+        },
+        "asset-db": {
+            "mount": {
+                "path": "./assets",
+                "readonly": true
+            }
+        }
+    },
+    "author": "y3v4d",
+    "editor": ">=3.6.1",
+    "scripts": {
+        "build": "tsc -b",
+        "watch": "tsc -w"
+    }
+}
