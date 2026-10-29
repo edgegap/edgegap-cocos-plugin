@@ -1,21 +1,22 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.unload = exports.load = exports.methods = void 0;
-// @ts-ignore
-const package_json_1 = __importDefault(require("../package.json"));
-const open_1 = __importDefault(require("open"));
+exports.methods = void 0;
+exports.load = load;
+exports.unload = unload;
+// Extension entry: menu commands. The work happens in the panel (panels/default) and core/.
+const electron_1 = require("electron");
+const PKG = 'edgegap-extension';
+const UTM = 'utm_source=plugin_cocos&utm_medium=servers_quickstart_plugin&utm_content=plugin_button';
 exports.methods = {
     openPanel() {
-        Editor.Panel.open(package_json_1.default.name);
+        Editor.Panel.open(PKG);
     },
-    openSite() {
-        (0, open_1.default)('https://console.edgegap.com/');
-    }
+    openDashboard() {
+        electron_1.shell.openExternal(`https://app.edgegap.com/?${UTM}`);
+    },
+    openDocs() {
+        electron_1.shell.openExternal(`https://github.com/edgegap/edgegap-cocos-plugin#readme`);
+    },
 };
 function load() { }
-exports.load = load;
 function unload() { }
-exports.unload = unload;

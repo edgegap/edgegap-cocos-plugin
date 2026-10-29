@@ -1,105 +1,65 @@
-# Edgegap Extension
-This version of Edgegap extension was created for the newest version of Cocos Creator (3.6.1) and it may have trouble working in the older version. It definitely won't work in the version before 3.x.
+# Edgegap Servers Quickstart for Cocos Creator
 
-## Context Menu
-Opening the panel, as well as opening the Edgegap Dashboard is done through the context menu that will be added to the **Extension** menu located at the top of the Cocos Creator editor.
+Cocos Creator extension that builds your multiplayer game server into a container, tests it locally, uploads it to Edgegap and starts a test server near you, from one editor panel.
 
-![Context](img/context.png)
+Supports **Cocos Creator 3.8** and newer, on Windows and macOS. Needs [Docker Desktop](https://docs.docker.com/get-docker/) running.
 
-## Panel
-Settings panel is the heart of the extension. Building the server, deploying the image, creating application and deploying it is all done in this single panel. At the very bottom, it contains the log box, that will track and print all necessary messages that will appear during the build and deployment process.
+A Cocos Creator game has no headless server build: its multiplayer server is a separate Node.js app, usually [Colyseus](https://colyseus.io), a Nakama runtime or a custom WebSocket server, in a folder of your project (for example `Server/`). The extension containerizes that folder. The game client stays a normal Cocos build (web, mobile, desktop).
 
-### Appearance
-![Panel](img/panel.png)
+Example: [edgegap/backend-game-sample-cocos-colyseus-tictactoe](https://github.com/edgegap/backend-game-sample-cocos-colyseus-tictactoe), Colyseus's Cocos tic-tac-toe demo with this extension, a server that stops itself after each match, and an Edgegap matchmaker "Find Match" flow.
 
-### Funcionality
-- **Server Directory** - Used to specify server directory that contains valid Dockerfile
-- **Build Command** - Specifies command that will be used to build the server. The only available macro is `${path}` that will be replaced with the server directory path.
-- **Registry Name** - Name of the Edgegap registry (for example: registry.edgegap.com)
-- **Repository Name** - Name of the users container repository (for example: y3v4d-nvo3b2aj64ne)
-- **Repository Username** - Users Edgegap container registry username. It's needed to successfully upload app version based on private registry image.
-- **Repository Token** - Users Edgegap container registry token. It's needed to successfully upload app version based on private registry image.
-- **API Token** - Users Edgegap API token. It's needed for Edgegap API calls.
-- **Image Name** - Name of image that will be pushed (for example: test, my-image, linux-server...)
-- **Image Tag** - Tag of the image that will be pushed (for example: 1.0, 1.1, 0.9...). When left empty, it will default to *latest*.
+## Install
 
-At the begging the panel also contains two buttons: **Build** and **Deploy**. After deployment the **Deploy** button will change to **Stop** button.
+1. Download this repository (Code → Download ZIP, or clone it).
+2. Copy it into your project as `extensions/edgegap-extension/`, so the folder holds `package.json`, `dist/`, `static/`, `i18n/` and `assets/`. `dist/` is prebuilt: no `npm install` needed.
+3. In Cocos Creator: **Extension → Extension Manager → Project**, enable **edgegap-extension** (click refresh if it isn't listed).
+4. Open it with **Extension → Edgegap → Open Panel**.
 
-![Deployment](img/deployment.png)
+## Use
 
-## Build Process
-After clicking the **Build** button, the following steps will happen:
+| Step | What happens |
+|---|---|
+| **1. Sign in** | Click **Get a token** (one-click sign-in on the Edgegap dashboard), paste the token, **Verify and sign in**. The token and the container registry login are saved in your Cocos Creator user profile, never in the project. A regular API token (User Settings → Tokens) works too: the panel then asks for the Project, Username and Token from the dashboard's Container Registry page. |
+| **2. Server** | The server folder (default `Server`), image name, tag (a UTC timestamp, also the Edgegap version name), port and protocol. Colyseus and other WebSocket servers: **WS** with **TLS Upgrade** on, so web builds on `https` pages can connect with `wss://`. No Dockerfile yet? **Create Dockerfile** writes a starting one for a Node.js server. These settings are saved in the project (`settings/v2/packages/edgegap-extension.json`), so your team shares them. |
+| **3. Build and test locally** | **Build image** runs `docker build --platform linux/amd64` (Edgegap runs x86-64 Linux, also when you build on Apple Silicon). **Run locally** starts it on the same port: point a client at `ws://localhost:<port>`. **Stop local** removes the container. |
+| **4. Upload** | **Push image and create version** logs in to `registry.edgegap.com`, pushes the image, creates the application if needed, and creates the version (or updates it if the tag already exists) with your port, CPU, memory and a maximum duration. |
+| **5. Deploy a test server** | **Deploy near me** starts one server close to your public IP and shows the address clients connect to (`wss://<id>.pr.edgegap.net:<port>`). **Stop server** stops it. It also stops on its own at the maximum duration. |
 
-- Building the server specified in the **Server Directory** with command specified in **Build Command**. If it fails, the process will terminate.
-- Building the Docker image based on a Dockerfile contained in the **Server Directory**. The image will have the following name: "**Registry name**/**Repository Name**/**Image Name**:**Image Tag**". If building the image fails, process will terminate.
-- Next, the image validation starts. In this step, local container will be created for 2 seconds. If it doesn't exit, or exits without errors, the container is stopped and removed, and the building process proceeds. If it exists with code different then 0, the new container is removed (if exists), the newly created image is removed and the process terminates.
-- After successful image validation, the image is pushed to the Edgegap Container Registry. If this step fails the process terminates.
-- Next, the application is created. The application will be named as follows: "**Image Name**-app". If application already exists, the process will proceed to the next step. If creating the application fails from other reasons, the process is terminated.
-- After creating the application, new version is created based on newly pushed image. New version will have unlocked 7777 TCP port with name default and will have the same name as the image tag. If version already exists, it will be patched. Patching application doesn't change it's ports, so if the ports need to change, the application version needs to be removed manually through the Edgegap Dashboard. If creating version fails from other reasons, the process terminates.
-- If every step was successful, building exists without errors.
+The Log section shows every command and API call. Passwords go to Docker through stdin and are never logged.
 
-## Deployment
-Deploying the application is done using the **Deploy** button, and stopping is done using the **Stop** button that will appear in place of **Deploy** button after deployment.
+### For players: one server per match
 
-### Deploying the Application
-Clicking the **Deploy** button will initiate the deployment process. Name of the app that will try to be deployed will be "**Image Name**-app" and the version of the app will be "**Image Tag**".
+The test server is for you. For players, use the [Edgegap matchmaker](https://docs.edgegap.com/learn/matchmaking): each match gets its own server near its players, and your server stops its deployment when the match ends. The example project shows both parts (the Colyseus server lifecycle and the Cocos client's Find Match).
 
-If deployment process fails because the app isn't created, or because it couldn't find a valid version, it will probably print the error in the log. If it fails from some other, internal reason (wrong ports, wrong repository credentials in the app version etc.) the status of the deployment will be **Error** and the actual error message has to be checked manually in the deployment section at the Edgegap Dashboard.
+## Headless (CI)
 
-If deployment completed without errors, the deployment status will be **Ready** and FQDN and IP fields will contain valid endpoints of the deployment (FQDN will also have mapped port included). Successful deployment will also save the deployment ID to the extension settings, so exitting and opening the panel won't cause deployment to stop being tracked.
+`scripts/e2e.mjs` runs the same steps without the editor, with the same code and the project's saved settings:
 
-### Stopping The Deployment
-After successful deployment, the whole panel will be blocked, and only the **Stop** button will be available. Clicking it will intiate the stop deployment process.
-
-If it fails for whatever reason, it will stop tracking the deployment and unlock the panel.
-
-## Server directory
-Server used in the example project is very simple, it's a nodejs express project, that contains only one endpoint that prints the example message. Any server can be used in the extension, and the only requirement for it is to contain valid Dockerfile. Without it, the build process won't work.
-
-## Installing the extension
-To install the extension for other projects, just download the .zip package with built extension (without the *src* directory), and extract it in the *<project_root>/extensions/edgegap-extension* directory. Then reopen the Cocos Creator project and the extensions should be working. If not, go into the **Extensions Manager** in the **Extension** context menu at the top, go to the **Project** tab, and check if it's there, and if it's launched.
-
-![Extension Manager](img/extensions-manager.png)
-
-## Modifing the source code
-In the included example project, the extension source code is availble under "*<project_root>/extensions/edgegap-extension/src*" path.
-
-At the first launch of the example project, the extension isn't initialized and it won't work. To initialize it, go into the extension root directory in the terminal and launch `npm install`; it will install all necessary dependencies for the extension to work. 
-
-This is not the case when installing the extension from the package without the source code, because it already has the *node_modules* folder packed.
-
-### Files specification
-
-#### **main.ts**
-Entry point of the extension, it only contains message handlers for opening the panel, and opening the Edgegap Dashboard in the browser.
-
-#### **shared/logger.ts**
-This file only contains the definitions of the `Logger` class. `Logger` class is basically a wrapper that utilizes textbox, for easily adding and editing log messages.
-
-#### **shared/utils.ts**
-This file contains all funcions that are used to encapsulate common tasks in the extension. Functions like `callAPI` or `executeCommand` are further encapsulated in the latter files, and are not used in the main panel script itself. Here is also located the only global object in the extension, the `logger`, that is an object based on the `Logger` class.
-
-#### **shared/commander.ts**
-This file contains all CLI calls used in the extension. These are mostly various `docker` commands that are encapsulated for easier usage. All of the functions utilize `executeCommand` function from **shared/utils.ts** script.
-
-#### **shared/api.ts**
-In this file are encapsulated all used Edgegap API calls. All of the function utilize `callAPI` function from **shared/utils.ts** script.
-
-#### **panels/default/index.ts**
-The heart of the extension. This script is responsible for handling the logic of the extensions main panel, so it's the biggest script in the source code.
-It's responsible for saving and loading the extensions configuration, assinging callbacks to the buttons, creating log entries, and handles logic for both build and deployment buttons.
-
-The main thing that will be probably changed is the default ports for the new app version. Ports for the app are defined on 151 line of this script and it by default it looks like this:
-```ts
-ports: [
-    {
-        name: "default",
-        port: 7777,
-        protocol: "TCP"
-    }
-]
+```bash
+EDGEGAP_API_TOKEN=<token> node scripts/e2e.mjs --project <path to Cocos project> --deploy --check "node <bot client> --server={url}"
 ```
-You can change the port number in the *port* field, and the protocol in the *protocol* field. Make sure to recompile the extension and remove the app version in the dashboard if it already exists, because updating the app version doesn't change it's ports.
 
-### Building the extension
-After changing anything in the source code, you have to rebuild it to see the changes. It is done by going into the extensions root directory in the terminal and launching `npm run build`.
+With a regular API token, also set `EDGEGAP_REGISTRY_PROJECT`, `EDGEGAP_REGISTRY_USERNAME` and `EDGEGAP_REGISTRY_TOKEN`. To only ship builds from CI, [edgegap/deploy-action](https://github.com/edgegap/deploy-action) is simpler.
+
+## Develop
+
+```bash
+npm install
+npm run build          # TypeScript in src/ -> dist/ (commit dist/)
+node test/panel-smoke.cjs
+```
+
+`src/core/` (Edgegap API, Docker, steps) has no editor dependency; `src/panels/default/` is the panel; `src/main.ts` the menu.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| "Docker is not running or not installed" | Start Docker Desktop. |
+| "not a quick-start token" | Use **Get a token** (one-click sign-in), or fill in the registry login from the dashboard's Container Registry page. |
+| Deployment fails to pull the image | The version's registry login is wrong: sign out and in again, then **Push image and create version**. |
+| Deployment errors right after start | Open the deployment's logs in the dashboard. Usually the Dockerfile's `CMD`, or the server not listening on the port set in the panel (`PORT` env var). |
+| First client join gets **502** for a few seconds | Normal right after a deployment turns ready: retry the join (the example's `joinWithRetry`). |
+| `wss://<ip>:<port>` fails the TLS check | Connect by the FQDN shown in the panel, not the IP. |
+
+The 2022 version (Cocos Creator 3.6) is kept at the `v1` tag.

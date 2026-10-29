@@ -2,62 +2,138 @@
     <div class="logo-container">
         <ui-image value="db://edgegap-extension/logo.png/texture" readonly></ui-image>
     </div>
-    <ui-prop class="spacer">
-        <ui-label slot="label">Server Directory</ui-label>
-        <ui-file id="file-server" type="directory" slot="content"></ui-file>
-    </ui-prop>
-    <ui-prop class="spacer">
-        <ui-label slot="label">Build Command</ui-label>
-        <ui-input id="inp-cmd" placeholder="Enter build command..." slot="content"></ui-input>
-    </ui-prop>
-    <ui-section class="config spacer" header="Edgegap Integration" expand>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">Registry Name</ui-label>
-            <ui-input id="inp-registry" placeholder="Enter registry name..." slot="content"></ui-input>
-        </ui-prop>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">Repository Name</ui-label>
-            <ui-input id="inp-repository" placeholder="Enter repository name..." slot="content"></ui-input>
-        </ui-prop>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">Repository Username</ui-label>
-            <ui-input id="inp-repo-username" placeholder="Enter repository username..." slot="content"></ui-input>
-        </ui-prop>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">Repository Token</ui-label>
-            <ui-input id="inp-repo-token" placeholder="Enter repository token..." slot="content" password></ui-input>
-        </ui-prop>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">API Token</ui-label>
-            <ui-input id="inp-token" placeholder="Enter token..." slot="content" password></ui-input>
-        </ui-prop>
-    </ui-section>
-    <ui-section class="config spacer" header="Image Configuration" expand>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">Image Name</ui-label>
-            <ui-input id="inp-image" placeholder="Enter image name..." slot="content"></ui-input>
-        </ui-prop>
-        <ui-prop class="prop-item">
-            <ui-label slot="label">Image Tag</ui-label>
-            <ui-input id="inp-tag" placeholder="Enter image tag... (default: latest)" slot="content"></ui-input>
-        </ui-prop>
-    </ui-section>
-    <div style="padding: 4px 16px"></div>
-    <div class="flex-hwrapper" style="padding: 0px 16px;">
-        <ui-label style="padding-right: 4px;">IP:</ui-label>
-        <ui-link id="link-ip" style="padding-right: 4px;">-</ui-link>
-        <ui-label style="padding-right: 4px;">FQDN:</ui-label>
-        <ui-link id="link-fqdn">-</ui-link>
-    </div>
-    <div class="flex-hwrapper" style="justify-content: space-between; padding: 0px 16px;" >
-        <ui-label id="lbl-status">Status of deployment: -</ui-label>
-        <div>
-            <ui-button id="btn-build" style="margin-right: 4px;">Build</ui-button>
-            <ui-button id="btn-deploy" type="primary">Deploy</ui-button>
-            <ui-button id="btn-stop-deploy" class="hidden" type="danger">Stop</ui-button>
+
+    <ui-section header="1. Sign in" expand class="spacer">
+        <div id="signed-out">
+            <ui-prop>
+                <ui-label slot="label" tooltip="Dashboard: User Settings > Tokens. Stored in your Cocos Creator user profile, never in the project.">API token</ui-label>
+                <ui-input id="inp-token" slot="content" password placeholder="token xxxxxxxx-xxxx-..."></ui-input>
+            </ui-prop>
+            <div class="row end">
+                <ui-link id="link-token" tooltip="One-click sign-in: gives a quick-start token, which also unlocks the registry login">Get a token</ui-link>
+                <ui-button id="btn-sign-in" type="primary">Verify and sign in</ui-button>
+            </div>
+            <div id="registry-manual" class="hidden">
+                <div class="row"><ui-label class="hint">This token can't read the registry login. Copy it from the dashboard's Container Registry page:</ui-label></div>
+                <ui-prop>
+                    <ui-label slot="label">Project</ui-label>
+                    <ui-input id="inp-reg-project" slot="content" placeholder="edgegap-xxxxxxxx"></ui-input>
+                </ui-prop>
+                <ui-prop>
+                    <ui-label slot="label">Username</ui-label>
+                    <ui-input id="inp-reg-user" slot="content"></ui-input>
+                </ui-prop>
+                <ui-prop>
+                    <ui-label slot="label">Registry token</ui-label>
+                    <ui-input id="inp-reg-token" slot="content" password></ui-input>
+                </ui-prop>
+                <div class="row end">
+                    <ui-link id="link-registry">Open the dashboard</ui-link>
+                    <ui-button id="btn-reg-save" type="primary">Use this registry login</ui-button>
+                </div>
+            </div>
         </div>
-    </div>
-    <ui-section class="flex-wrapper" style="padding: 16px" header="Log" expand>
-        <textarea id="ta-log" readonly></textarea>
+        <div id="signed-in" class="hidden">
+            <div class="row">
+                <ui-label id="lbl-account" class="hint">Signed in</ui-label>
+                <ui-button id="btn-sign-out">Sign out</ui-button>
+            </div>
+        </div>
+    </ui-section>
+
+    <ui-section header="2. Server" expand class="spacer">
+        <ui-prop>
+            <ui-label slot="label" tooltip="Your Node.js game server (Colyseus, Nakama runtime, custom...), relative to the project. It needs a Dockerfile.">Server folder</ui-label>
+            <ui-input id="inp-server-dir" slot="content" placeholder="Server"></ui-input>
+        </ui-prop>
+        <div class="row end">
+            <ui-label id="lbl-dockerfile" class="hint">-</ui-label>
+            <ui-button id="btn-dockerfile">Create Dockerfile</ui-button>
+        </div>
+        <ui-prop>
+            <ui-label slot="label">Image name</ui-label>
+            <ui-input id="inp-image" slot="content" placeholder="my-game-server"></ui-input>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="Also the Edgegap version name. Default: UTC timestamp.">Tag</ui-label>
+            <div slot="content" class="row nopad">
+                <ui-input id="inp-tag" class="grow"></ui-input>
+                <ui-button id="btn-new-tag" tooltip="New UTC timestamp">Now</ui-button>
+            </div>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="The port your server listens on (PORT).">Port</ui-label>
+            <ui-num-input id="inp-port" slot="content" step="1" min="1" max="59999" preci="0"></ui-num-input>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="WS for WebSocket servers (Colyseus, socket.io...). UDP/TCP for native-only games.">Protocol</ui-label>
+            <ui-select id="sel-protocol" slot="content">
+                <option value="WS">WS (WebSocket)</option>
+                <option value="TCP">TCP</option>
+                <option value="UDP">UDP</option>
+                <option value="TCP/UDP">TCP/UDP</option>
+                <option value="HTTP">HTTP</option>
+            </ui-select>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="Edgegap terminates TLS: clients connect with wss://. Needed for web builds on https pages.">TLS Upgrade</ui-label>
+            <ui-checkbox id="chk-tls" slot="content"></ui-checkbox>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="Clients read the external port under this name (deployment or matchmaker assignment).">Port name</ui-label>
+            <ui-input id="inp-port-name" slot="content" placeholder="gameport"></ui-input>
+        </ui-prop>
+    </ui-section>
+
+    <ui-section header="3. Build and test locally" expand class="spacer">
+        <div class="row end">
+            <ui-button id="btn-build" type="primary">Build image</ui-button>
+            <ui-button id="btn-run-local">Run locally</ui-button>
+            <ui-button id="btn-stop-local">Stop local</ui-button>
+        </div>
+        <div class="row"><ui-label id="lbl-local" class="hint">Not running.</ui-label></div>
+    </ui-section>
+
+    <ui-section header="4. Upload to Edgegap" expand class="spacer">
+        <ui-prop>
+            <ui-label slot="label">Application</ui-label>
+            <div slot="content" class="row nopad">
+                <ui-input id="inp-app" class="grow" placeholder="my-game"></ui-input>
+                <ui-button id="btn-refresh-apps" tooltip="Pick an existing application">Existing...</ui-button>
+            </div>
+        </ui-prop>
+        <ui-prop id="prop-apps" class="hidden">
+            <ui-label slot="label">Existing</ui-label>
+            <ui-select id="sel-apps" slot="content"></ui-select>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="1024 = 1 vCPU">CPU units</ui-label>
+            <ui-num-input id="inp-cpu" slot="content" step="128" min="128" preci="0"></ui-num-input>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="At least 256, at most 2x the CPU units">Memory (MB)</ui-label>
+            <ui-num-input id="inp-mem" slot="content" step="128" min="256" preci="0"></ui-num-input>
+        </ui-prop>
+        <ui-prop>
+            <ui-label slot="label" tooltip="Edgegap stops a deployment after this long even if the server never stops itself.">Max duration (min)</ui-label>
+            <ui-num-input id="inp-duration" slot="content" step="5" min="1" preci="0"></ui-num-input>
+        </ui-prop>
+        <div class="row end">
+            <ui-button id="btn-upload" type="primary">Push image and create version</ui-button>
+        </div>
+    </ui-section>
+
+    <ui-section header="5. Deploy a test server" expand class="spacer">
+        <div class="row end">
+            <ui-button id="btn-deploy" type="primary">Deploy near me</ui-button>
+            <ui-button id="btn-stop" type="danger">Stop server</ui-button>
+        </div>
+        <div class="row"><ui-label id="lbl-deploy" class="hint">No test server.</ui-label></div>
+        <div class="row"><ui-input id="inp-url" readonly class="grow" placeholder="Server URL appears here"></ui-input></div>
+        <div class="row"><ui-label class="hint">For players, use the Edgegap matchmaker: each match gets its own server near its players.</ui-label></div>
+    </ui-section>
+
+    <ui-section header="Log" expand class="spacer">
+        <ui-textarea id="ta-log" readonly></ui-textarea>
     </ui-section>
 </div>
