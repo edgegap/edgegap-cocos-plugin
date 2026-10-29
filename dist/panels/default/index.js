@@ -1,398 +1,332 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-const fs_extra_1 = require("fs-extra");
+// Edgegap panel: sign in, build the server image, test it locally, upload it, deploy a test server.
+//
+// Where settings live:
+//   - API token and registry login: the Cocos Creator user profile ('global'), never the project folder.
+//   - Server settings (folder, image, port...): the project (settings/v2/packages/edgegap-extension.json),
+//     so a team or a sample repo shares them.
+//   - Last test deployment: project-local profile ('local', git-ignored).
+const fs_1 = require("fs");
 const path_1 = require("path");
-const utils_1 = require("../../shared/utils");
-const package_json_1 = __importDefault(require("../../../package.json"));
-const commander_1 = require("../../shared/commander");
-const api_1 = require("../../shared/api");
-// Used for keeping thack of the current deployment id, because it's used in more then one function.
-let currentDeploymentID = '';
-// Used to store the id of the deployment monitor timer.
-let deploymentTimer = null;
+const electron_1 = require("electron");
+const api_1 = require("../../core/api");
+const wf = __importStar(require("../../core/workflow"));
+const PKG = 'edgegap-extension';
+const UTM = 'utm_source=plugin_cocos&utm_medium=servers_quickstart_plugin&utm_content=plugin_button';
+// One-click sign-in, as in the Unity and Godot plugins: it shows a quick-start token, which also gets the registry login.
+const TOKEN_URL = `https://app.edgegap.com/?oneClick=true&${UTM}`;
+const DASHBOARD_URL = `https://app.edgegap.com/?${UTM}`;
+let token = '';
+let pendingToken = ''; // a valid regular API token waiting for a manual registry login
+let registry = null;
+let cfg;
+let deploymentId = '';
+let busy = false;
+async function getGlobal(key, fallback) {
+    const v = await Editor.Profile.getConfig(PKG, key, 'global');
+    return (v === undefined || v === null || v === '') ? fallback : v;
+}
+async function setGlobal(key, value) {
+    await Editor.Profile.setConfig(PKG, key, value, 'global');
+}
 module.exports = Editor.Panel.define({
-    template: (0, fs_extra_1.readFileSync)((0, path_1.join)(__dirname, '../../../static/template/default/index.html'), 'utf-8'),
-    style: (0, fs_extra_1.readFileSync)((0, path_1.join)(__dirname, '../../../static/style/default/index.css'), 'utf-8'),
+    template: (0, fs_1.readFileSync)((0, path_1.join)(__dirname, '../../../static/template/default/index.html'), 'utf-8'),
+    style: (0, fs_1.readFileSync)((0, path_1.join)(__dirname, '../../../static/style/default/index.css'), 'utf-8'),
     $: {
-        taLog: "#ta-log",
-        btnBuild: "#btn-build",
-        btnDeploy: "#btn-deploy",
-        btnStopDeploy: "#btn-stop-deploy",
-        inpCmd: "#inp-cmd",
-        inpRegistry: "#inp-registry",
-        inpRepository: "#inp-repository",
-        inpImage: "#inp-image",
-        inpTag: "#inp-tag",
-        inpToken: "#inp-token",
-        inpRepoUsername: "#inp-repo-username",
-        inpRepoToken: "#inp-repo-token",
-        fileServer: "#file-server",
-        lblStatus: "#lbl-status",
-        linkIP: "#link-ip",
-        linkFQDN: "#link-fqdn"
+        signedOut: '#signed-out', signedIn: '#signed-in', lblAccount: '#lbl-account',
+        inpToken: '#inp-token', btnSignIn: '#btn-sign-in', btnSignOut: '#btn-sign-out', linkToken: '#link-token',
+        registryManual: '#registry-manual', inpRegProject: '#inp-reg-project', inpRegUser: '#inp-reg-user',
+        inpRegToken: '#inp-reg-token', btnRegSave: '#btn-reg-save', linkRegistry: '#link-registry',
+        inpServerDir: '#inp-server-dir', lblDockerfile: '#lbl-dockerfile', btnDockerfile: '#btn-dockerfile',
+        inpImage: '#inp-image', inpTag: '#inp-tag', btnNewTag: '#btn-new-tag',
+        inpPort: '#inp-port', selProtocol: '#sel-protocol', chkTls: '#chk-tls', inpPortName: '#inp-port-name',
+        btnBuild: '#btn-build', btnRunLocal: '#btn-run-local', btnStopLocal: '#btn-stop-local', lblLocal: '#lbl-local',
+        inpApp: '#inp-app', btnRefreshApps: '#btn-refresh-apps', propApps: '#prop-apps', selApps: '#sel-apps',
+        inpCpu: '#inp-cpu', inpMem: '#inp-mem', inpDuration: '#inp-duration', btnUpload: '#btn-upload',
+        btnDeploy: '#btn-deploy', btnStop: '#btn-stop', lblDeploy: '#lbl-deploy', inpUrl: '#inp-url',
+        taLog: '#ta-log',
     },
+    // `this` is the panel instance: this.$ holds the elements above, methods call each other.
     methods: {
-        // Enable all input fields and buttons in the panel.
-        enableAll() {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
-            (_a = this.$.fileServer) === null || _a === void 0 ? void 0 : _a.removeAttribute('disabled');
-            (_b = this.$.inpCmd) === null || _b === void 0 ? void 0 : _b.removeAttribute('disabled');
-            (_c = this.$.inpRegistry) === null || _c === void 0 ? void 0 : _c.removeAttribute('disabled');
-            (_d = this.$.inpRepository) === null || _d === void 0 ? void 0 : _d.removeAttribute('disabled');
-            (_e = this.$.inpRepoUsername) === null || _e === void 0 ? void 0 : _e.removeAttribute('disabled');
-            (_f = this.$.inpRepoToken) === null || _f === void 0 ? void 0 : _f.removeAttribute('disabled');
-            (_g = this.$.inpToken) === null || _g === void 0 ? void 0 : _g.removeAttribute('disabled');
-            (_h = this.$.inpImage) === null || _h === void 0 ? void 0 : _h.removeAttribute('disabled');
-            (_j = this.$.inpTag) === null || _j === void 0 ? void 0 : _j.removeAttribute('disabled');
-            (_k = this.$.btnBuild) === null || _k === void 0 ? void 0 : _k.removeAttribute('disabled');
-            (_l = this.$.btnDeploy) === null || _l === void 0 ? void 0 : _l.removeAttribute('disabled');
-            (_m = this.$.btnStopDeploy) === null || _m === void 0 ? void 0 : _m.removeAttribute('disabled');
+        log(line) {
+            const ta = this.$.taLog;
+            const stamp = new Date().toISOString().slice(11, 19);
+            ta.value = (ta.value ? ta.value + '\n' : '') + `[${stamp}] ${line}`;
+            const inner = ta.shadowRoot?.querySelector('textarea');
+            if (inner)
+                inner.scrollTop = inner.scrollHeight;
         },
-        // Disable all input fiels and buttons in the panel.
-        disableAll() {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
-            (_a = this.$.fileServer) === null || _a === void 0 ? void 0 : _a.setAttribute('disabled', '');
-            (_b = this.$.inpCmd) === null || _b === void 0 ? void 0 : _b.setAttribute('disabled', '');
-            (_c = this.$.inpRegistry) === null || _c === void 0 ? void 0 : _c.setAttribute('disabled', '');
-            (_d = this.$.inpRepository) === null || _d === void 0 ? void 0 : _d.setAttribute('disabled', '');
-            (_e = this.$.inpRepoUsername) === null || _e === void 0 ? void 0 : _e.setAttribute('disabled', '');
-            (_f = this.$.inpRepoToken) === null || _f === void 0 ? void 0 : _f.setAttribute('disabled', '');
-            (_g = this.$.inpToken) === null || _g === void 0 ? void 0 : _g.setAttribute('disabled', '');
-            (_h = this.$.inpImage) === null || _h === void 0 ? void 0 : _h.setAttribute('disabled', '');
-            (_j = this.$.inpTag) === null || _j === void 0 ? void 0 : _j.setAttribute('disabled', '');
-            (_k = this.$.btnBuild) === null || _k === void 0 ? void 0 : _k.setAttribute('disabled', '');
-            (_l = this.$.btnDeploy) === null || _l === void 0 ? void 0 : _l.setAttribute('disabled', '');
-            (_m = this.$.btnStopDeploy) === null || _m === void 0 ? void 0 : _m.setAttribute('disabled', '');
+        // Reads the form into cfg and saves it in the project.
+        async readForm() {
+            const $ = this.$;
+            cfg = {
+                serverDir: String($.inpServerDir.value || 'Server').trim(),
+                imageName: String($.inpImage.value || cfg.imageName).trim(),
+                tag: String($.inpTag.value || wf.timestampTag()).trim(),
+                app: String($.inpApp.value || cfg.app).trim(),
+                port: {
+                    name: String($.inpPortName.value || 'gameport').trim(),
+                    port: Number($.inpPort.value) || 2567,
+                    protocol: $.selProtocol.value || 'WS',
+                    tlsUpgrade: !!$.chkTls.value,
+                },
+                cpuUnits: Number($.inpCpu.value) || 256,
+                memoryMb: Number($.inpMem.value) || 512,
+                maxDurationMinutes: Number($.inpDuration.value) || 60,
+            };
+            await Editor.Profile.setProject(PKG, 'server', cfg);
+            this.refreshDockerfile();
         },
-        async buildAndPush() {
-            const serverDir = this.$.fileServer.value;
-            const buildCmd = this.$.inpCmd.value;
-            const registry = this.$.inpRegistry.value;
-            const repository = this.$.inpRepository.value;
-            const image = this.$.inpImage.value;
-            const tag = this.$.inpTag.value;
-            const token = this.$.inpToken.value;
-            utils_1.logger.clear();
-            try {
-                const serverBuildResult = await (0, commander_1.executeServerBuild)(serverDir, buildCmd);
-                if (serverBuildResult.code != 0)
-                    return;
+        writeForm() {
+            const $ = this.$;
+            $.inpServerDir.value = cfg.serverDir;
+            $.inpImage.value = cfg.imageName;
+            $.inpTag.value = cfg.tag;
+            $.inpPort.value = cfg.port.port;
+            $.selProtocol.value = cfg.port.protocol;
+            $.chkTls.value = cfg.port.tlsUpgrade;
+            $.inpPortName.value = cfg.port.name;
+            $.inpApp.value = cfg.app;
+            $.inpCpu.value = cfg.cpuUnits;
+            $.inpMem.value = cfg.memoryMb;
+            $.inpDuration.value = cfg.maxDurationMinutes;
+        },
+        refreshDockerfile() {
+            const dir = wf.serverPath(Editor.Project.path, cfg);
+            const has = (0, fs_1.existsSync)((0, path_1.join)(dir, 'Dockerfile'));
+            this.$.lblDockerfile.innerText = !(0, fs_1.existsSync)(dir) ? `Folder not found: ${cfg.serverDir}`
+                : has ? `Dockerfile found in ${cfg.serverDir}` : `No Dockerfile in ${cfg.serverDir}`;
+            this.$.btnDockerfile.toggleAttribute('disabled', has || !(0, fs_1.existsSync)(dir));
+        },
+        refreshAuth() {
+            const signedIn = !!token && !!registry;
+            this.$.signedOut.classList.toggle('hidden', signedIn);
+            this.$.signedIn.classList.toggle('hidden', !signedIn);
+            if (registry)
+                this.$.lblAccount.innerText = `Signed in. Registry: ${registry.registryUrl}/${registry.project}`;
+            for (const b of ['btnBuild', 'btnRunLocal', 'btnUpload', 'btnDeploy', 'btnRefreshApps']) {
+                this.$[b].toggleAttribute('disabled', !signedIn || busy);
             }
-            catch (error) {
-                utils_1.logger.add(`Catched error: ${error.message}.`);
+            this.$.btnStop.toggleAttribute('disabled', !deploymentId || busy);
+        },
+        // Runs one step: locks the buttons, logs errors instead of throwing.
+        async step(name, fn) {
+            if (busy)
+                return;
+            busy = true;
+            this.refreshAuth();
+            try {
+                await this.readForm();
+                await fn();
+            }
+            catch (e) {
+                this.log(`${name} failed: ${e?.message || e}`);
+                console.error(e);
+            }
+            finally {
+                busy = false;
+                this.refreshAuth();
+            }
+        },
+        problems() {
+            const p = wf.validate(Editor.Project.path, cfg);
+            p.forEach((x) => this.log(`! ${x}`));
+            return p.length > 0;
+        },
+        async signIn() {
+            const t = String(this.$.inpToken.value || '').trim();
+            if (!t) {
+                this.log('Paste your API token first.');
                 return;
             }
-            const url = `${registry}/${repository}/${image}${tag.length == 0 ? "" : `:${tag}`}`;
-            const containerName = (0, utils_1.makeContainerNameFromURL)(url);
-            try {
-                const buildResult = await (0, commander_1.executeDockerBuild)(url, serverDir);
-                if (buildResult.code != 0)
-                    return;
-                utils_1.logger.addBreak().add("Testing the image...");
-                const startResult = await (0, commander_1.executeDockerRun)(url, containerName);
-                if (startResult.code == 0 && !startResult.exited) {
-                    const stopResult = await (0, commander_1.executeDockerStop)(containerName);
-                    if (stopResult.code != 0)
-                        return;
-                }
-                const removeContainerResult = await (0, commander_1.executeDockerRemove)(containerName);
-                if (removeContainerResult.code != 0)
-                    return;
-                if (startResult.code != 0) { // errors when starting, remove invalid image
-                    await (0, commander_1.executeDockerRemoveImage)(url);
-                    return;
-                }
-                const pushResult = await (0, commander_1.executeDockerPush)(url);
-                if (pushResult.code != 0)
-                    return;
-            }
-            catch (error) {
-                utils_1.logger.add(`Catched Error: ${error.message}.`);
-                return;
-            }
-            // if building and pushing were successful, proceed to app creation
-            utils_1.logger.addBreak().add('Creating application...').addBreak();
-            const repoUsername = this.$.inpRepoUsername.value;
-            const repoToken = this.$.inpRepoToken.value;
-            const appName = (0, utils_1.makeApplicationNameFromImage)(image);
-            try {
-                const result = await (0, api_1.apiCreateApplication)(token, { name: appName });
-                if (result.status === 200) {
-                    utils_1.logger.add(`Successfully created ${appName}.`);
-                }
-                else if (result.status == 409) {
-                    utils_1.logger.add(`Can't create an ${appName}, already exists! Skipping...`);
-                    // don't worry, proceed
-                }
-                else {
-                    utils_1.logger.add(`Creating app failed. Status: ${result.status} Message: ${result.data.message}`);
-                    return;
-                }
-            }
-            catch (error) {
-                utils_1.logger.add(`Internal Error: ${error.message}`);
-                return;
-            }
-            const tagName = tag.length === 0 ? 'latest' : tag;
-            try {
-                let result = await (0, api_1.apiCreateApplicationVersion)(token, appName, {
-                    name: tagName,
-                    docker_tag: tagName,
-                    docker_repository: registry,
-                    docker_image: `${repository}/${image}`,
-                    private_username: repoUsername,
-                    private_token: repoToken,
-                    ports: [
-                        {
-                            name: "default",
-                            port: 7777,
-                            protocol: "TCP"
-                        }
-                    ]
-                });
-                if (result.status === 200) {
-                    utils_1.logger.add(`Successfully uploaded version ${tagName} to the ${appName}.`);
-                    return;
-                }
-                else if (result.status !== 409) {
-                    utils_1.logger.add(`Uploading version ${tagName} failed. Status: ${result.status} Message: ${result.data.message}`);
-                    return;
-                }
-                // status is 409, retry with patch
-                result = await (0, api_1.apiPatchApplicationVersion)(token, appName, {
-                    name: tagName,
-                    docker_tag: tagName,
-                    docker_repository: registry,
-                    docker_image: `${repository}/${image}`,
-                    private_username: repoUsername,
-                    private_token: repoToken
-                });
-                if (result.status === 200) {
-                    utils_1.logger.add(`Successfully patched ${tagName} version for app ${appName}.`);
-                }
-                else {
-                    utils_1.logger.add(`Updating existing version ${tagName} failed. Status: ${result.status} Message: ${result.data.message}`);
-                }
-            }
-            catch (error) {
-                utils_1.logger.add(`Catched Error: ${error.message}`);
-            }
-        },
-        async deploy(onProgress = (data) => { }, onComplete = (error) => { }) {
-            const image = this.$.inpImage.value;
-            const tag = this.$.inpTag.value;
-            const token = this.$.inpToken.value;
-            utils_1.logger.addBreak().add("Deploying the application...");
-            currentDeploymentID = '';
-            clearInterval(deploymentTimer);
-            try {
-                const result = await (0, api_1.apiDeployApplicationVersion)(token, {
-                    app_name: (0, utils_1.makeApplicationNameFromImage)(image),
-                    version_name: tag.length == 0 ? "latest" : tag
-                });
-                if (result.status !== 200) {
-                    utils_1.logger.add(`Deploying application ${image}-app failed.\nStatus ${result.status}. Message: ${result.data.message}.`);
-                    onComplete(result.data);
-                    return;
-                }
-                currentDeploymentID = result.data.request_id;
-                this.monitorDeployment((data) => {
-                    onProgress(data);
-                    if (data.current_status_label === "Ready") {
-                        utils_1.logger.add("Successfully deployed the application.");
-                        clearInterval(deploymentTimer);
-                        onComplete();
-                    }
-                }, (error) => {
-                    onComplete(error);
-                });
-            }
-            catch (error) {
-                utils_1.logger.add(`Catched Error: ${error.message}`);
-                onComplete(error);
-            }
-        },
-        async stopDeployment(onProgress = (data) => { }, onComplete = (error) => { }) {
-            const token = this.$.inpToken.value;
-            utils_1.logger.addBreak().add("Stopping the deployment...");
-            clearInterval(deploymentTimer);
-            try {
-                const result = await (0, api_1.apiStopDeployment)(token, currentDeploymentID);
-                if (result.status !== 200 && result.status !== 202) {
-                    utils_1.logger.add(`Stopping deployment with ID ${currentDeploymentID} failed.\nStatus: ${result.status}. Message: ${result.data.message}`);
-                    onComplete(result.data);
-                    return;
-                }
-                this.monitorDeployment((data) => {
-                    onProgress(data.current_status_label);
-                    if (data.current_status_label === "Terminated") {
-                        utils_1.logger.add("Successfully stopped the deployment.");
-                        clearInterval(deploymentTimer);
-                        onComplete();
-                    }
-                }, (error) => {
-                    onComplete(error);
-                });
-            }
-            catch (error) {
-                utils_1.logger.add(`Catched Error: ${error.message}`);
-                onComplete(error);
-            }
-        },
-        monitorDeployment(onData = (data) => { }, onError = (error) => { }) {
-            const token = this.$.inpToken.value;
-            clearInterval(deploymentTimer);
-            deploymentTimer = setInterval(async () => {
+            await this.step('Sign in', async () => {
+                this.log('Verifying token...');
                 try {
-                    const result = await (0, utils_1.callAPI)(`status/${currentDeploymentID}`, token, undefined, 'get');
-                    if (result.status !== 200) {
-                        utils_1.logger.add(`Deployment #${currentDeploymentID} monitor failed with status ${result.status}.`);
-                        clearInterval(deploymentTimer);
-                        onError(result.data);
-                        return;
-                    }
-                    const portText = result.data.ports && result.data.ports.default ? ':' + result.data.ports.default.external : '';
-                    // update the label values in the panel
-                    this.$.linkIP.textContent = result.data.public_ip ? result.data.public_ip : '-';
-                    this.$.linkFQDN.textContent = result.data.fqdn ? result.data.fqdn + portText : '-';
-                    this.$.lblStatus.textContent = `Status of deployment: ${result.data.current_status_label}`;
-                    onData(result.data);
+                    registry = await new api_1.EdgegapApi(t).verifyAndGetRegistry();
                 }
-                catch (error) {
-                    utils_1.logger.add(`Catched Error: ${error.message}`);
-                    clearInterval(deploymentTimer);
-                    onError(error);
+                catch (e) {
+                    if (!(e instanceof api_1.NotQuickStartTokenError))
+                        throw e;
+                    pendingToken = t;
+                    this.$.inpToken.value = '';
+                    this.$.registryManual.classList.remove('hidden');
+                    this.log(e.message);
+                    return;
                 }
-            }, 500);
-        },
-        // Callback for the build button
-        async onBuildButtonClicked() {
-            this.disableAll();
-            await this.buildAndPush();
-            this.enableAll();
-        },
-        // Callback for the deploy button
-        onDeployButtonClicked() {
-            var _a, _b;
-            this.disableAll();
-            (_a = this.$.btnDeploy) === null || _a === void 0 ? void 0 : _a.classList.add('hidden');
-            (_b = this.$.btnStopDeploy) === null || _b === void 0 ? void 0 : _b.classList.remove('hidden');
-            this.deploy((data) => {
-                var _a;
-                (_a = this.$.btnStopDeploy) === null || _a === void 0 ? void 0 : _a.removeAttribute('disabled');
-            }, (error) => {
-                var _a, _b;
-                if (error) {
-                    if (!currentDeploymentID || currentDeploymentID.length == 0) {
-                        // switch back to deploy button, if deployment wasn't successful
-                        (_a = this.$.btnDeploy) === null || _a === void 0 ? void 0 : _a.classList.remove('hidden');
-                        (_b = this.$.btnStopDeploy) === null || _b === void 0 ? void 0 : _b.classList.add('hidden');
-                    }
-                    this.enableAll();
-                }
+                token = t;
+                await setGlobal('token', token);
+                await setGlobal('registry', registry);
+                this.$.inpToken.value = '';
+                this.log(`Signed in. Registry ${registry.registryUrl}/${registry.project}`);
             });
         },
-        // Callback for the stop button
-        onStopDeployButtonClicked() {
-            this.disableAll();
-            this.stopDeployment(() => { }, (error) => {
-                var _a, _b;
-                currentDeploymentID = '';
-                this.$.linkIP.textContent = `-`;
-                this.$.linkFQDN.textContent = `-`;
-                // show deploy button instead of stop after stopping
-                (_a = this.$.btnDeploy) === null || _a === void 0 ? void 0 : _a.classList.remove('hidden');
-                (_b = this.$.btnStopDeploy) === null || _b === void 0 ? void 0 : _b.classList.add('hidden');
-                this.enableAll();
+        // Regular API token: the developer pastes the registry login from the dashboard.
+        async useManualRegistry() {
+            const $ = this.$;
+            const reg = (0, api_1.manualRegistry)(String($.inpRegProject.value || ''), String($.inpRegUser.value || ''), String($.inpRegToken.value || ''));
+            if (!pendingToken) {
+                this.log('Verify your API token first.');
+                return;
+            }
+            if (!reg.project || !reg.username || !reg.token) {
+                this.log('Fill in Project, Username and Registry token.');
+                return;
+            }
+            token = pendingToken;
+            pendingToken = '';
+            registry = reg;
+            await setGlobal('token', token);
+            await setGlobal('registry', registry);
+            $.inpRegToken.value = '';
+            this.$.registryManual.classList.add('hidden');
+            this.log(`Signed in. Registry ${reg.registryUrl}/${reg.project}`);
+            this.refreshAuth();
+        },
+        async signOut() {
+            token = '';
+            registry = null;
+            await setGlobal('token', '');
+            await setGlobal('registry', null);
+            this.log('Signed out.');
+            this.refreshAuth();
+        },
+        async createDockerfile() {
+            await this.step('Create Dockerfile', async () => {
+                const file = wf.writeDockerfileIfMissing(Editor.Project.path, cfg);
+                this.log(file ? `Wrote ${file}. Check its CMD starts your server.` : 'A Dockerfile already exists.');
+                this.refreshDockerfile();
             });
-        }
+        },
+        async build() {
+            await this.step('Build', async () => {
+                if (this.problems())
+                    return;
+                await wf.buildImage(Editor.Project.path, cfg, registry, (l) => this.log(l));
+            });
+        },
+        async runLocal() {
+            await this.step('Run locally', async () => {
+                const url = await wf.testLocally(cfg, registry, (l) => this.log(l));
+                this.$.lblLocal.innerText = `Running: ${url}`;
+            });
+        },
+        async stopLocal() {
+            await this.step('Stop local', async () => {
+                await wf.stopLocalTest(cfg, (l) => this.log(l));
+                this.$.lblLocal.innerText = 'Not running.';
+            });
+        },
+        async pickApps() {
+            await this.step('List applications', async () => {
+                const apps = await new api_1.EdgegapApi(token).listApps();
+                const sel = this.$.selApps;
+                sel.innerHTML = ['<option value="">(choose)</option>', ...apps.map((a) => `<option value="${a.replace(/"/g, '')}">${a.replace(/</g, '')}</option>`)].join('');
+                this.$.propApps.classList.remove('hidden');
+                this.log(`${apps.length} application(s).`);
+            });
+        },
+        async upload() {
+            await this.step('Upload', async () => {
+                if (this.problems())
+                    return;
+                await wf.upload(new api_1.EdgegapApi(token), cfg, registry, (l) => this.log(l));
+            });
+        },
+        async deploy() {
+            await this.step('Deploy', async () => {
+                if (deploymentId)
+                    this.log(`Note: test server ${deploymentId} may still be running; stop it if you're done with it.`);
+                this.$.lblDeploy.innerText = 'Starting...';
+                const { status, url } = await wf.deployAndWait(new api_1.EdgegapApi(token), cfg, (l) => this.log(l), async (id) => {
+                    deploymentId = id;
+                    await Editor.Profile.setConfig(PKG, 'lastDeployment', id, 'local');
+                });
+                this.$.lblDeploy.innerText = `Ready: ${status.requestId} (stops after ${cfg.maxDurationMinutes} min at most)`;
+                this.$.inpUrl.value = url;
+            });
+        },
+        async stopDeployment() {
+            if (!deploymentId)
+                return;
+            await this.step('Stop', async () => {
+                await new api_1.EdgegapApi(token).stop(deploymentId);
+                this.log(`Stopping ${deploymentId}.`);
+                deploymentId = '';
+                await Editor.Profile.setConfig(PKG, 'lastDeployment', '', 'local');
+                this.$.lblDeploy.innerText = 'No test server.';
+                this.$.inpUrl.value = '';
+            });
+        },
     },
     async ready() {
-        var _a, _b, _c, _d, _e;
-        // disable everything for the loading time
-        this.disableAll();
-        utils_1.logger.assign(this.$.taLog);
-        utils_1.logger.clear();
-        // load the stored values from the extension configuration
-        this.$.fileServer.value = await getConfig('serverDir') || "";
-        this.$.inpCmd.value = await getConfig('buildCmd') || "";
-        this.$.inpRegistry.value = await getConfig('registry') || "";
-        this.$.inpRepository.value = await getConfig('repository') || "";
-        this.$.inpImage.value = await getConfig('image') || "";
-        this.$.inpToken.value = await getConfig('token') || "";
-        this.$.inpTag.value = await getConfig('tag') || "";
-        this.$.inpRepoUsername.value = await getConfig('repoUsername') || "";
-        this.$.inpRepoToken.value = await getConfig('repoToken') || "";
-        // assign button callbacks
-        (_a = this.$.btnBuild) === null || _a === void 0 ? void 0 : _a.addEventListener('confirm', this.onBuildButtonClicked.bind(this));
-        (_b = this.$.btnDeploy) === null || _b === void 0 ? void 0 : _b.addEventListener('confirm', this.onDeployButtonClicked.bind(this));
-        (_c = this.$.btnStopDeploy) === null || _c === void 0 ? void 0 : _c.addEventListener('confirm', this.onStopDeployButtonClicked.bind(this));
-        // check for existing, tracked deployment
-        const deploymentID = await getConfig('deploymentID');
-        if (!deploymentID) {
-            this.enableAll();
-            return;
+        const $ = this.$;
+        token = await getGlobal('token', '');
+        registry = await getGlobal('registry', null);
+        const saved = await Editor.Profile.getProject(PKG, 'server');
+        cfg = { ...wf.defaultConfig(Editor.Project.name || 'cocos-game'), ...(saved || {}) };
+        cfg.port = { ...wf.DEFAULT_PORT, ...(saved?.port || {}) };
+        deploymentId = await Editor.Profile.getConfig(PKG, 'lastDeployment', 'local') || '';
+        this.writeForm();
+        this.refreshDockerfile();
+        this.refreshAuth();
+        if (deploymentId)
+            this.$.lblDeploy.innerText = `Last test server: ${deploymentId}`;
+        $.btnSignIn.addEventListener('confirm', () => this.signIn());
+        $.btnSignOut.addEventListener('confirm', () => this.signOut());
+        $.linkToken.addEventListener('click', () => electron_1.shell.openExternal(TOKEN_URL));
+        $.linkRegistry.addEventListener('click', () => electron_1.shell.openExternal(DASHBOARD_URL));
+        $.btnRegSave.addEventListener('confirm', () => this.useManualRegistry());
+        $.btnDockerfile.addEventListener('confirm', () => this.createDockerfile());
+        $.btnNewTag.addEventListener('confirm', () => { $.inpTag.value = wf.timestampTag(); this.readForm(); });
+        $.btnBuild.addEventListener('confirm', () => this.build());
+        $.btnRunLocal.addEventListener('confirm', () => this.runLocal());
+        $.btnStopLocal.addEventListener('confirm', () => this.stopLocal());
+        $.btnRefreshApps.addEventListener('confirm', () => this.pickApps());
+        $.selApps.addEventListener('change', () => { if ($.selApps.value) {
+            $.inpApp.value = $.selApps.value;
+            this.readForm();
+        } });
+        $.btnUpload.addEventListener('confirm', () => this.upload());
+        $.btnDeploy.addEventListener('confirm', () => this.deploy());
+        $.btnStop.addEventListener('confirm', () => this.stopDeployment());
+        for (const id of ['inpServerDir', 'inpImage', 'inpTag', 'inpPort', 'selProtocol', 'chkTls', 'inpPortName', 'inpApp', 'inpCpu', 'inpMem', 'inpDuration']) {
+            $[id].addEventListener('change', () => this.readForm());
         }
-        utils_1.logger.add(`Starting monitoring saved deployment with ID ${deploymentID}...`);
-        (_d = this.$.btnDeploy) === null || _d === void 0 ? void 0 : _d.classList.add('hidden');
-        (_e = this.$.btnStopDeploy) === null || _e === void 0 ? void 0 : _e.classList.remove('hidden');
-        currentDeploymentID = deploymentID;
-        this.monitorDeployment((data) => {
-            var _a, _b, _c, _d;
-            if (data.current_status_label === "Terminated") {
-                // put back the default state if the current deployment terminates
-                currentDeploymentID = '';
-                this.$.linkIP.textContent = `-`;
-                this.$.linkFQDN.textContent = `-`;
-                (_a = this.$.btnDeploy) === null || _a === void 0 ? void 0 : _a.classList.remove('hidden');
-                (_b = this.$.btnStopDeploy) === null || _b === void 0 ? void 0 : _b.classList.add('hidden');
-                this.enableAll();
-            }
-            else if (data.current_status_label === "Ready") {
-                // enable stop button if the deployment is successful
-                (_c = this.$.btnStopDeploy) === null || _c === void 0 ? void 0 : _c.removeAttribute('disabled');
-            }
-            else {
-                if (data.current_status_label !== "Terminating") {
-                    // also enable stop button if the deployment is in progress, but no terminating
-                    (_d = this.$.btnStopDeploy) === null || _d === void 0 ? void 0 : _d.removeAttribute('disabled');
-                }
-                return;
-            }
-            // stop monitoring after successful termination or deployment.
-            clearInterval(deploymentTimer);
-        }, (error) => {
-            var _a, _b;
-            // bring back the default state if any internal error appears.
-            currentDeploymentID = '';
-            (_a = this.$.btnDeploy) === null || _a === void 0 ? void 0 : _a.classList.remove('hidden');
-            (_b = this.$.btnStopDeploy) === null || _b === void 0 ? void 0 : _b.classList.add('hidden');
-            this.enableAll();
-        });
+        this.log(token ? 'Ready.' : 'Paste your Edgegap API token to start.');
     },
-    async beforeClose() {
-        // save all the input fields into the configuration
-        await setConfig('serverDir', this.$.fileServer.value);
-        await setConfig('buildCmd', this.$.inpCmd.value);
-        await setConfig('registry', this.$.inpRegistry.value);
-        await setConfig('repository', this.$.inpRepository.value);
-        await setConfig('image', this.$.inpImage.value);
-        await setConfig('token', this.$.inpToken.value);
-        await setConfig('tag', this.$.inpTag.value);
-        await setConfig('repoUsername', this.$.inpRepoUsername.value);
-        await setConfig('repoToken', this.$.inpRepoToken.value);
-        await setConfig('deploymentID', currentDeploymentID);
-        clearInterval(deploymentTimer);
-    },
-    close() { }
+    close() { },
 });
-// helper functions to not clutter the main script
-async function getConfig(name) {
-    return await Editor.Profile.getConfig(package_json_1.default.name, name, 'local');
-}
-async function setConfig(name, value) {
-    await Editor.Profile.setConfig(package_json_1.default.name, name, value, 'local');
-}

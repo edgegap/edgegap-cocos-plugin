@@ -1,57 +1,56 @@
 :host {
-    overflow-y: scroll;
+    overflow-y: auto;
 }
 
 #app {
     color: var(--color-normal-contrast-weakest);
     margin: auto;
+    padding-bottom: 16px;
 }
 
 .logo-container {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px 16px;
+    padding: 16px;
 }
 
 .spacer {
-    padding: 4px 16px;
+    padding: 4px 12px;
 }
 
-.flex-wrapper {
-    display: flex;
-    flex-direction: column;
-    padding: 8px 16px;
-}
-
-.flex-hwrapper {
+.row {
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding: 8px 16px;
+    gap: 6px;
+    padding: 4px 0;
 }
 
-.prop-item {
-    margin-top: 6px;
-    margin-bottom: 6px;
+.row.end {
+    justify-content: flex-end;
+}
+
+.row.nopad {
+    padding: 0;
+}
+
+.grow {
+    flex: 1;
+}
+
+.hint {
+    opacity: 0.75;
+    flex: 1;
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 #ta-log {
-    background-color: var(--color-normal-fill-emphasis);
-    color: var(--color-normal-contrast);
-    border-color: var(--color-normal-border-emphasis);
-
-    resize: none;
-    min-height: 200px;
-    word-break:break-all; 
-    margin: 16px 8px 0px 0px;
-}
-
-#ta-log:focus {
-    outline: none !important;
-    border-color: var(--color-focus-border-emphasis);
+    width: 100%;
+    height: 220px;
+    font-family: monospace;
+    font-size: 11px;
 }
